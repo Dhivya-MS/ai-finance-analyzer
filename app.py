@@ -1,46 +1,104 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------------------
 # PAGE CONFIG
 # ---------------------------
-st.set_page_config(page_title="AI Finance Analyzer", layout="wide")
-
-st.title("💰 AI Behavioral Finance Analyzer")
-st.markdown("### Understand your *spending behavior* & hidden financial patterns")
+st.set_page_config(page_title="AI Finance Pro", layout="wide")
 
 # ---------------------------
-# LOAD DATA
+# PREMIUM UI CSS
 # ---------------------------
-df = pd.read_csv("data.csv")
-df["Date"] = pd.to_datetime(df["Date"])
+st.markdown("""
+<style>
+body {background-color: #0e1117;}
+h1, h2, h3 {color: white;}
+.stMetric {background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;}
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------------------
-# BASIC METRICS
+# LOGIN SYSTEM
 # ---------------------------
-total_spending = df["Amount"].sum()
+import streamlit as st
+
+# Session state create
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+# LOGIN UI
+if not st.session_state.logged_in:
+    st.title("🔐 Login to AI Finance Analyzer")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if username == "admin" and password == "1234":
+            st.session_state.logged_in = True
+            st.success("Login successful ✅")
+        else:
+            st.error("Invalid credentials ❌")
+
+# AFTER LOGIN (MAIN APP)
+else:
+    st.title("💰 AI Behavioral Finance Analyzer")
+
+    st.success("Welcome bro 😎🔥")
+
+    st.write("Now your dashboard will come here...")
+
+    # Example:
+    st.write("👉 Total Spending: ₹6750")
+    st.write("👉 Avg Spending: ₹675")
+
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+
+# ---------------------------
+# TITLE
+# ---------------------------
+st.title("💰 AI-Based Financial Risk & Behavior Analyzer")
+st.markdown("### 🔍 Smart AI insights into your spending")
+
+# ---------------------------
+# FILE UPLOAD
+# ---------------------------
+uploaded_file = st.file_uploader("📂 Upload your expense CSV", type=["csv"])
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+else:
+    df = pd.read_csv("data.csv")
+
+# ---------------------------
+# DATA CLEANING
+# ---------------------------
+df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
+df = df.dropna()
+
+# ---------------------------
+# METRICS
+# ---------------------------
+total = df["Amount"].sum()
 avg = df["Amount"].mean()
 
 col1, col2 = st.columns(2)
-
-with col1:
-    st.metric("💸 Total Spending", f"₹{total_spending}")
-
-with col2:
-    st.metric("📊 Average Spending", f"₹{round(avg,2)}")
+col1.metric("💸 Total Spending", f"₹{round(total,2)}")
+col2.metric("📊 Average Spending", f"₹{round(avg,2)}")
 
 # ---------------------------
 # CATEGORY ANALYSIS
 # ---------------------------
-st.subheader("📊 Spending by Category")
+st.subheader("📊 Category Analysis")
 
-category_sum = df.groupby("Category")["Amount"].sum()
+cat = df.groupby("Category")["Amount"].sum()
 
 fig, ax = plt.subplots()
-category_sum.plot(kind='bar', color='skyblue', ax=ax)
-plt.title("Category-wise Spending")
+cat.plot(kind="bar", ax=ax)
 st.pyplot(fig)
 
 # ---------------------------
@@ -48,107 +106,112 @@ st.pyplot(fig)
 # ---------------------------
 st.subheader("📈 Spending Trend")
 
-df["Day"] = range(1, len(df)+1)
+df_sorted = df.sort_values("Date")
 
 fig2, ax2 = plt.subplots()
-ax2.plot(df["Day"], df["Amount"], marker='o')
-ax2.set_title("Spending Trend Over Time")
+ax2.plot(df_sorted["Date"], df_sorted["Amount"], marker='o')
+plt.xticks(rotation=45)
 st.pyplot(fig2)
 
 # ---------------------------
 # ANOMALY DETECTION
 # ---------------------------
-st.subheader("🚨 Unusual Spending Detection")
+st.subheader("🚨 Anomaly Detection")
 
 threshold = avg * 1.5
 anomalies = df[df["Amount"] > threshold]
 
 if not anomalies.empty:
-    st.error("Unusual high spending detected!")
+    st.error("Unusual high spending detected")
     st.write(anomalies)
 else:
-    st.success("No unusual spending")
+    st.success("No anomalies detected")
 
 # ---------------------------
-# USER PERCEPTION INPUT
+# USER PERCEPTION
 # ---------------------------
 st.subheader("🧠 Your Perception")
 
-avg_perception = st.slider("How do you feel about your spending? (1 = low, 10 = high)", 1, 10, 5)
+perception = st.slider("Rate your spending (1-10)", 1, 10, 5)
 
 # ---------------------------
-# PERCEPTION vs REALITY
+# BEHAVIOR ANALYSIS
 # ---------------------------
-st.subheader("⚖️ Perception vs Reality")
+st.subheader("🧬 Behavioral Analysis")
 
-if avg_perception > 7 and avg > 500:
-    st.warning("⚠️ You are underestimating your spending!")
-elif avg_perception < 5 and avg < 500:
-    st.info("You may be overestimating your spending")
-else:
-    st.success("Your perception matches your actual spending")
-
-# ---------------------------
-# SMART INSIGHTS
-# ---------------------------
-st.subheader("🧠 Smart Insights")
-
-shopping = df[df["Category"] == "Shopping"]["Amount"].sum()
-food = df[df["Category"] == "Food"]["Amount"].sum()
-
-if shopping > food:
-    st.write("🛍️ You spend more on Shopping than Food")
-
-if df["Amount"].iloc[-1] > df["Amount"].iloc[0]:
-    st.write("📈 Your spending is increasing over time")
-
-# ---------------------------
-# PREDICTION (Simple AI)
-# ---------------------------
-st.subheader("🔮 Future Spending Prediction")
-
-predicted = avg * 1.1
-st.write(f"Estimated next period spending: ₹{int(predicted)}")
+top_cat = cat.idxmax()
+st.info(f"You spend most on: {top_cat}")
 
 # ---------------------------
 # RISK SCORE
 # ---------------------------
-st.subheader("⚠️ Financial Risk Score")
+st.subheader("⚠️ Risk Score")
 
 risk = 0
 
-if total_spending > avg:
+if total > avg:
     risk += 40
-
-if len(anomalies) > 1:
+if len(anomalies) > 2:
     risk += 30
-
-if avg_perception > 7:
+if perception > 7:
     risk += 30
 
 st.metric("Risk Score", f"{risk}/100")
 
-if risk > 70:
-    st.error("💥 High Financial Risk")
-elif risk > 40:
-    st.warning("⚠️ Moderate Risk")
-else:
-    st.success("✅ Low Risk")
-
 # ---------------------------
-# FINANCIAL PERSONALITY
+# AI INSIGHTS
 # ---------------------------
-st.subheader("🧬 Your Financial Personality")
+st.subheader("🤖 AI Insights")
 
 if risk > 70:
-    st.write("💥 High Risk Spender")
+    st.error("🚨 High Risk: Overspending + unstable behavior")
 elif risk > 40:
-    st.write("⚠️ Moderate Spender")
+    st.warning("⚠ Moderate Risk: Monitor spending")
 else:
-    st.write("✅ Controlled Spender")
+    st.success("✅ Good financial control")
 
 # ---------------------------
-# EXTRA ALERT
+# PERCEPTION VS REALITY
 # ---------------------------
-if avg > 700:
-    st.write("⚠️ High spending detected overall")
+st.subheader("⚖️ Perception vs Reality")
+
+if perception > 7 and total > avg:
+    st.warning("You think spending is fine, but actually high")
+elif perception < 4 and total < avg:
+    st.info("You are over-worrying about spending")
+else:
+    st.success("Perception matches reality")
+
+# ---------------------------
+# PREDICTION
+# ---------------------------
+st.subheader("🔮 Prediction")
+
+pred = avg * 1.1
+st.write(f"Next expected spending: ₹{round(pred,2)}")
+
+# ---------------------------
+# PDF REPORT
+# ---------------------------
+def create_pdf():
+    doc = SimpleDocTemplate("report.pdf")
+    styles = getSampleStyleSheet()
+
+    content = []
+    content.append(Paragraph(f"Total Spending: ₹{total}", styles["Normal"]))
+    content.append(Paragraph(f"Average Spending: ₹{avg}", styles["Normal"]))
+    content.append(Paragraph(f"Risk Score: {risk}/100", styles["Normal"]))
+    content.append(Paragraph(f"Top Category: {top_cat}", styles["Normal"]))
+
+    doc.build(content)
+
+create_pdf()
+
+with open("report.pdf", "rb") as f:
+    st.download_button("📄 Download Report", f, file_name="finance_report.pdf")
+
+# ---------------------------
+# FOOTER
+# ---------------------------
+st.markdown("---")
+st.markdown("🚀 Developed by Dhivya M S | AI Finance PRO")
