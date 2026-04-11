@@ -1,162 +1,202 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 
-# ---------------------------
-# SESSION INIT
-# ---------------------------
+st.set_page_config(page_title="AI Finance Analyzer", layout="wide")
+
+# =========================
+# 🔐 LOGIN
+# =========================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-if "expenses" not in st.session_state:
-    st.session_state.expenses = []
-
-# ---------------------------
-# LOGIN PAGE
-# ---------------------------
 if not st.session_state.logged_in:
-    st.title("🔐 Login to AI Finance Analyzer")
+    st.title("🔐 Login")
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if username == "admin" and password == "1234":
+        if u == "admin" and p == "1234":
             st.session_state.logged_in = True
-            st.success("Login successful ✅")
-            st.rerun()   # 🔥 IMPORTANT
+            st.success("Login success")
+            st.rerun()
         else:
-            st.error("Invalid credentials ❌")
+            st.error("Wrong credentials")
 
     st.stop()
 
-# ---------------------------
-# MAIN APP (AFTER LOGIN)
-# ---------------------------
-st.title("💰 AI-Based Financial Risk & Behavior Analyzer")
-st.markdown("### 🔍 Smart AI insights into your spending")
-
-# LOGOUT
 if st.button("Logout"):
     st.session_state.logged_in = False
     st.rerun()
 
-# ---------------------------
-# MODE SELECT
-# ---------------------------
-mode = st.radio("Choose how you want to use the app 👇", ["Upload CSV", "Manual Entry"])
+# =========================
+# TITLE
+# =========================
+st.title("💰 AI Financial Analyzer")
 
-# ---------------------------
-# UPLOAD CSV
-# ---------------------------
+# =========================
+# STORAGE
+# =========================
+if "expenses" not in st.session_state:
+    st.session_state.expenses = []
+
+# =========================
+# MODE
+# =========================
+mode = st.radio("Choose 👇", ["Upload CSV", "Manual Entry"])
+
+# =========================
+# CSV
+# =========================
 if mode == "Upload CSV":
-    uploaded_file = st.file_uploader("📁 Upload your expense CSV", type=["csv"])
+    file = st.file_uploader("Upload CSV", type=["csv"])
 
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+    if file:
+        df = pd.read_csv(file)
         st.session_state.df = df
     else:
-        st.warning("Please upload a CSV file")
+        st.warning("Upload file")
         st.stop()
 
-# ---------------------------
-# MANUAL ENTRY
-# ---------------------------
+# =========================
+# MANUAL
+# =========================
 if mode == "Manual Entry":
-    st.subheader("➕ Add Expense Manually")
 
-    date = st.date_input("Select Date")
-    category = st.selectbox("Category", ["Food", "Travel", "Shopping", "Bills", "Others"])
+    date = st.date_input("Date")
+
+    cat_opt = st.selectbox("Category", ["Food","Travel","Shopping","Bills","Others"])
+
+    if cat_opt == "Others":
+        custom = st.text_input("Enter category")
+        category = custom if custom else "Others"
+    else:
+        category = cat_opt
+
     amount = st.number_input("Amount", min_value=0.0)
 
-    if st.button("Add Expense"):
+    if st.button("Add"):
         st.session_state.expenses.append({
             "Date": str(date),
             "Category": category,
             "Amount": amount
         })
-        st.success("Expense added!")
+        st.success("Added")
 
     if st.session_state.expenses:
         df = pd.DataFrame(st.session_state.expenses)
         st.session_state.df = df
 
-# ---------------------------
-# CHECK DATA
-# ---------------------------
+# =========================
+# CHECK
+# =========================
 if "df" not in st.session_state:
-    st.warning("Please add or upload data to continue")
+    st.warning("Add data")
     st.stop()
 
 df = st.session_state.df
 
-# ---------------------------
-# DISPLAY DATA
-# ---------------------------
-st.write("### 📊 Your Data")
+# =========================
+# FIX TYPES
+# =========================
+df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
+df = df.dropna(subset=["Amount"])
+
+# =========================
+# SHOW DATA
+# =========================
+st.subheader("📊 Data")
 st.dataframe(df)
 
-# ---------------------------
-# ANALYSIS
-# ---------------------------
-st.write("### 📈 Analysis")
-
+# =========================
+# SUMMARY
+# =========================
 total = df["Amount"].sum()
 avg = df["Amount"].mean()
 
-st.write(f"💸 Total Spending: ₹{total}")
-st.write(f"📊 Average Spending: ₹{round(avg,2)}")
+st.subheader("💰 Summary")
+st.write(f"Total: ₹{total:.2f}")
+st.write(f"Average: ₹{avg:.2f}")
 
-# ---------------------------
-# CATEGORY CHART
-# ---------------------------
-st.write("### 🧾 Category Breakdown")
+# =========================
+# CATEGORY GRAPH
+# =========================
 cat = df.groupby("Category")["Amount"].sum()
-st.bar_chart(cat)
 
-# ---------------------------
-# DELETE OPTION
-# ---------------------------
-st.write("### ❌ Delete Expense")
+st.subheader("📊 Category Bar")
+fig, ax = plt.subplots()
+cat.plot(kind="bar", ax=ax)
+st.pyplot(fig)
 
-delete_index = st.number_input("Enter index to delete", min_value=0, step=1)
+# =========================
+# PIE
+# =========================
+st.subheader("🥧 Pie")
+fig2, ax2 = plt.subplots()
+cat.plot(kind="pie", autopct="%1.1f%%", ax=ax2)
+ax2.set_ylabel("")
+st.pyplot(fig2)
+
+# =========================
+# MONTHLY
+# =========================
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+df["Month"] = df["Date"].dt.to_period("M")
+
+monthly = df.groupby("Month")["Amount"].sum()
+
+st.subheader("📅 Monthly Spending")
+fig3, ax3 = plt.subplots()
+monthly.plot(kind="bar", ax=ax3)
+st.pyplot(fig3)
+
+# =========================
+# PREDICTION
+# =========================
+st.subheader("🔮 Prediction")
+
+if len(monthly) >= 2:
+    pred = monthly.mean()
+    st.info(f"👉 Next month approx spend: ₹{pred:.2f}")
+else:
+    st.warning("Need more data")
+
+# =========================
+# DELETE
+# =========================
+st.subheader("❌ Delete")
+
+i = st.number_input("Index", min_value=0, step=1)
 
 if st.button("Delete"):
-    if mode == "Manual Entry" and 0 <= delete_index < len(st.session_state.expenses):
-        st.session_state.expenses.pop(delete_index)
-        st.success("Deleted successfully")
+    if mode == "Manual Entry" and i < len(st.session_state.expenses):
+        st.session_state.expenses.pop(i)
+        st.session_state.df = pd.DataFrame(st.session_state.expenses)
+        st.success("Deleted")
+        st.rerun()
     else:
-        st.error("Invalid index or CSV mode")
+        st.error("Invalid")
 
-# ---------------------------
+# =========================
 # DOWNLOAD
-# ---------------------------
-st.write("### 💾 Download Data")
+# =========================
+csv = df.to_csv(index=False).encode("utf-8")
+st.download_button("Download CSV", csv)
 
-csv = df.to_csv(index=False).encode('utf-8')
-
-st.download_button(
-    label="Download CSV",
-    data=csv,
-    file_name="expenses.csv",
-    mime="text/csv"
-)
-
-# ---------------------------
+# =========================
 # AI INSIGHT
-# ---------------------------
-st.write("### 🤖 AI Insight")
+# =========================
+st.subheader("🤖 AI Insight")
 
 if total > 5000:
-    st.warning("⚠️ High spending! Reduce expenses.")
-elif total > 2000:
-    st.info("🙂 Moderate spending.")
+    st.warning("High spending")
 else:
-    st.success("🔥 Good financial control!")
+    st.success("Good control")
 
-# ---------------------------
+# =========================
 # ADVICE
-# ---------------------------
-st.write("### 🎯 Advice")
-
-highest = df.groupby("Category")["Amount"].sum().idxmax()
-st.write(f"👉 You spend most on **{highest}**. Try to reduce it!")
+# =========================
+top = cat.idxmax()
+st.subheader("🎯 Advice")
+st.info(f"Reduce spending on {top}")
