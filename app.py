@@ -1,35 +1,18 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------------------
-# PAGE CONFIG
+# SESSION INIT
 # ---------------------------
-st.set_page_config(page_title="AI Finance Pro", layout="wide")
-
-# ---------------------------
-# PREMIUM UI CSS
-# ---------------------------
-st.markdown("""
-<style>
-body {background-color: #0e1117;}
-h1, h2, h3 {color: white;}
-.stMetric {background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;}
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------------------
-# LOGIN SYSTEM
-# ---------------------------
-import streamlit as st
-
-# Session state create
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# LOGIN UI
+if "expenses" not in st.session_state:
+    st.session_state.expenses = []
+
+# ---------------------------
+# LOGIN PAGE
+# ---------------------------
 if not st.session_state.logged_in:
     st.title("🔐 Login to AI Finance Analyzer")
 
@@ -40,178 +23,140 @@ if not st.session_state.logged_in:
         if username == "admin" and password == "1234":
             st.session_state.logged_in = True
             st.success("Login successful ✅")
+            st.rerun()   # 🔥 IMPORTANT
         else:
             st.error("Invalid credentials ❌")
 
-# AFTER LOGIN (MAIN APP)
-else:
-    st.title("💰 AI Behavioral Finance Analyzer")
-
-    st.success("Welcome bro 😎🔥")
-
-    st.write("Now your dashboard will come here...")
-
-    # Example:
-    st.write("👉 Total Spending: ₹6750")
-    st.write("👉 Avg Spending: ₹675")
-
-    if st.button("Logout"):
-        st.session_state.logged_in = False
+    st.stop()
 
 # ---------------------------
-# TITLE
+# MAIN APP (AFTER LOGIN)
 # ---------------------------
 st.title("💰 AI-Based Financial Risk & Behavior Analyzer")
 st.markdown("### 🔍 Smart AI insights into your spending")
 
-# ---------------------------
-# FILE UPLOAD
-# ---------------------------
-uploaded_file = st.file_uploader("📂 Upload your expense CSV", type=["csv"])
-
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-else:
-    df = pd.read_csv("data.csv")
+# LOGOUT
+if st.button("Logout"):
+    st.session_state.logged_in = False
+    st.rerun()
 
 # ---------------------------
-# DATA CLEANING
+# MODE SELECT
 # ---------------------------
-df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
-df = df.dropna()
+mode = st.radio("Choose how you want to use the app 👇", ["Upload CSV", "Manual Entry"])
 
 # ---------------------------
-# METRICS
+# UPLOAD CSV
 # ---------------------------
+if mode == "Upload CSV":
+    uploaded_file = st.file_uploader("📁 Upload your expense CSV", type=["csv"])
+
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df = df
+    else:
+        st.warning("Please upload a CSV file")
+        st.stop()
+
+# ---------------------------
+# MANUAL ENTRY
+# ---------------------------
+if mode == "Manual Entry":
+    st.subheader("➕ Add Expense Manually")
+
+    date = st.date_input("Select Date")
+    category = st.selectbox("Category", ["Food", "Travel", "Shopping", "Bills", "Others"])
+    amount = st.number_input("Amount", min_value=0.0)
+
+    if st.button("Add Expense"):
+        st.session_state.expenses.append({
+            "Date": str(date),
+            "Category": category,
+            "Amount": amount
+        })
+        st.success("Expense added!")
+
+    if st.session_state.expenses:
+        df = pd.DataFrame(st.session_state.expenses)
+        st.session_state.df = df
+
+# ---------------------------
+# CHECK DATA
+# ---------------------------
+if "df" not in st.session_state:
+    st.warning("Please add or upload data to continue")
+    st.stop()
+
+df = st.session_state.df
+
+# ---------------------------
+# DISPLAY DATA
+# ---------------------------
+st.write("### 📊 Your Data")
+st.dataframe(df)
+
+# ---------------------------
+# ANALYSIS
+# ---------------------------
+st.write("### 📈 Analysis")
+
 total = df["Amount"].sum()
 avg = df["Amount"].mean()
 
-col1, col2 = st.columns(2)
-col1.metric("💸 Total Spending", f"₹{round(total,2)}")
-col2.metric("📊 Average Spending", f"₹{round(avg,2)}")
+st.write(f"💸 Total Spending: ₹{total}")
+st.write(f"📊 Average Spending: ₹{round(avg,2)}")
 
 # ---------------------------
-# CATEGORY ANALYSIS
+# CATEGORY CHART
 # ---------------------------
-st.subheader("📊 Category Analysis")
-
+st.write("### 🧾 Category Breakdown")
 cat = df.groupby("Category")["Amount"].sum()
-
-fig, ax = plt.subplots()
-cat.plot(kind="bar", ax=ax)
-st.pyplot(fig)
+st.bar_chart(cat)
 
 # ---------------------------
-# TREND ANALYSIS
+# DELETE OPTION
 # ---------------------------
-st.subheader("📈 Spending Trend")
+st.write("### ❌ Delete Expense")
 
-df_sorted = df.sort_values("Date")
+delete_index = st.number_input("Enter index to delete", min_value=0, step=1)
 
-fig2, ax2 = plt.subplots()
-ax2.plot(df_sorted["Date"], df_sorted["Amount"], marker='o')
-plt.xticks(rotation=45)
-st.pyplot(fig2)
+if st.button("Delete"):
+    if mode == "Manual Entry" and 0 <= delete_index < len(st.session_state.expenses):
+        st.session_state.expenses.pop(delete_index)
+        st.success("Deleted successfully")
+    else:
+        st.error("Invalid index or CSV mode")
 
 # ---------------------------
-# ANOMALY DETECTION
+# DOWNLOAD
 # ---------------------------
-st.subheader("🚨 Anomaly Detection")
+st.write("### 💾 Download Data")
 
-threshold = avg * 1.5
-anomalies = df[df["Amount"] > threshold]
+csv = df.to_csv(index=False).encode('utf-8')
 
-if not anomalies.empty:
-    st.error("Unusual high spending detected")
-    st.write(anomalies)
+st.download_button(
+    label="Download CSV",
+    data=csv,
+    file_name="expenses.csv",
+    mime="text/csv"
+)
+
+# ---------------------------
+# AI INSIGHT
+# ---------------------------
+st.write("### 🤖 AI Insight")
+
+if total > 5000:
+    st.warning("⚠️ High spending! Reduce expenses.")
+elif total > 2000:
+    st.info("🙂 Moderate spending.")
 else:
-    st.success("No anomalies detected")
+    st.success("🔥 Good financial control!")
 
 # ---------------------------
-# USER PERCEPTION
+# ADVICE
 # ---------------------------
-st.subheader("🧠 Your Perception")
+st.write("### 🎯 Advice")
 
-perception = st.slider("Rate your spending (1-10)", 1, 10, 5)
-
-# ---------------------------
-# BEHAVIOR ANALYSIS
-# ---------------------------
-st.subheader("🧬 Behavioral Analysis")
-
-top_cat = cat.idxmax()
-st.info(f"You spend most on: {top_cat}")
-
-# ---------------------------
-# RISK SCORE
-# ---------------------------
-st.subheader("⚠️ Risk Score")
-
-risk = 0
-
-if total > avg:
-    risk += 40
-if len(anomalies) > 2:
-    risk += 30
-if perception > 7:
-    risk += 30
-
-st.metric("Risk Score", f"{risk}/100")
-
-# ---------------------------
-# AI INSIGHTS
-# ---------------------------
-st.subheader("🤖 AI Insights")
-
-if risk > 70:
-    st.error("🚨 High Risk: Overspending + unstable behavior")
-elif risk > 40:
-    st.warning("⚠ Moderate Risk: Monitor spending")
-else:
-    st.success("✅ Good financial control")
-
-# ---------------------------
-# PERCEPTION VS REALITY
-# ---------------------------
-st.subheader("⚖️ Perception vs Reality")
-
-if perception > 7 and total > avg:
-    st.warning("You think spending is fine, but actually high")
-elif perception < 4 and total < avg:
-    st.info("You are over-worrying about spending")
-else:
-    st.success("Perception matches reality")
-
-# ---------------------------
-# PREDICTION
-# ---------------------------
-st.subheader("🔮 Prediction")
-
-pred = avg * 1.1
-st.write(f"Next expected spending: ₹{round(pred,2)}")
-
-# ---------------------------
-# PDF REPORT
-# ---------------------------
-def create_pdf():
-    doc = SimpleDocTemplate("report.pdf")
-    styles = getSampleStyleSheet()
-
-    content = []
-    content.append(Paragraph(f"Total Spending: ₹{total}", styles["Normal"]))
-    content.append(Paragraph(f"Average Spending: ₹{avg}", styles["Normal"]))
-    content.append(Paragraph(f"Risk Score: {risk}/100", styles["Normal"]))
-    content.append(Paragraph(f"Top Category: {top_cat}", styles["Normal"]))
-
-    doc.build(content)
-
-create_pdf()
-
-with open("report.pdf", "rb") as f:
-    st.download_button("📄 Download Report", f, file_name="finance_report.pdf")
-
-# ---------------------------
-# FOOTER
-# ---------------------------
-st.markdown("---")
-st.markdown("🚀 Developed by Dhivya M S | AI Finance PRO")
+highest = df.groupby("Category")["Amount"].sum().idxmax()
+st.write(f"👉 You spend most on **{highest}**. Try to reduce it!")
